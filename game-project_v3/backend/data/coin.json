@@ -1,0 +1,19 @@
+[
+    {
+        "name": "coin_structure_detailed_lev1",
+        "x": 25,
+        "y": 1,
+        "z": 38,
+        "level": 1,
+        "role": "default"
+    },
+    {
+        "name": "coin_structure_detailed_lev1",
+        "x": 16,
+        "y": 1,
+        "z": -39,
+        "level": 1,
+        "role": "finalPrize"
+    }
+   
+]

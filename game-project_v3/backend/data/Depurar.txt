@@ -1,0 +1,46 @@
+Armado el escenario, es importante mirar que las rutas generadas sobre las cuales se requiere aplicar una precision en la phisica de los modelos, si estas estan bien estructuradas para que luego no se presente problemas con el personaje que recorrera el escenario.
+
+No se debe dejar tan lleno de elementos el escenario que no permita al personaje fluir libremente.
+De la lista de objetos se debe definir, que elementos:
+ 1. No tendran fisica, 
+ 2. Cuales si tendra en forma de cajas 
+ 3. Cuales se requiere de mayor precision en la maya de los modelos sobre los cuales se vaya a realizar una interaccion mas precisa con ellos.
+ 
+ 
+ Se creo el archivo PhysicsShapeFactory.sj que maneja la clase para vincular trimesh (Mallas bien definidas para los objetos que queremos que soporte fisicas)
+
+
+Esta parte se aplica sobre algunos objetos que aparecen las mallas movidas
+
+PASO 1: Asegura que la geometría esté correctamente rotada en el espacio Blender
+Abre tu objeto en Blender
+
+En modo Object, selecciona el objeto
+
+Presiona N para abrir el panel lateral → pestaña Item
+
+Verifica:
+
+Rotation X = 0
+Rotation Y = 0
+Rotation Z = 0
+
+Location en (0,0,0) si lo quieres al centro
+
+Si ves rotaciones, presiona:
+
+Ctrl + A → Rotation
+
+juego12gus
+guswill12
+
+En la construccion en blender no dejar dos objetos alineados con un espacio pequeño entre ellos, porque el personaje tendra problemas en pasar.
+No dejas zonas estrechas
+
+1. 🧭 Locomoción por dirección de mirada + botón (como la que estás implementando ahora)
+Más usado y compatible
+Usas la orientación de la cámara y un botón (ej. botón A) para avanzar. Muy común en:
+
+Juegos WebVR de exploración
+
+Simuladores 360º interactivos

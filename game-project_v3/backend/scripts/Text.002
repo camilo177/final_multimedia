@@ -1,0 +1,64 @@
+import bpy
+import os
+import json
+from mathutils import Vector
+
+export_path = r"D:/UCC/React/PortafolioUCC/Project/game-project/public/models/toycar2"
+json_path = os.path.join(export_path, "toy_car_blocks.json")
+
+os.makedirs(export_path, exist_ok=True)
+
+positions = []
+
+# Evaluated graph para capturar transformaciones reales
+depsgraph = bpy.context.evaluated_depsgraph_get()
+
+# Forzar modo objeto
+bpy.ops.object.mode_set(mode='OBJECT')
+
+# Actualiza la vista
+bpy.context.view_layer.update()
+
+for obj in bpy.context.selected_objects:
+    if obj.type != 'MESH':
+        continue
+
+    # Evaluar objeto correctamente (muy importante)
+    obj_eval = obj.evaluated_get(depsgraph)
+    matrix_world = obj_eval.matrix_world
+
+    # Bounding box center en coordenadas globales
+    bbox_corners = [matrix_world @ Vector(corner) for corner in obj.bound_box]
+    center = sum(bbox_corners, Vector()) / 8
+
+    # Limpieza del nombre
+    name = obj.name.lower().replace(" ", "_").split('.')[0]
+
+    pos = {
+        "name": name,
+        "x": round(center.x, 2),
+        "y": round(center.z, 2),  # Blender Z → Three.js Y
+        "z": round(center.y, 2),  # Blender Y → Three.js Z
+    }
+
+    positions.append(pos)
+    print(f"📦 {name}: ({pos['x']}, {pos['y']}, {pos['z']})")
+
+    # Exportar sin aplicar transform
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+    filepath = os.path.join(export_path, f"{name}.glb")
+    bpy.ops.export_scene.gltf(
+        filepath=filepath,
+        use_selection=True,
+        export_format='GLB',
+        export_apply=False  # ❗❗ NO aplicar transform
+    )
+
+# Guardar archivo JSON
+with open(json_path, "w") as f:
+    json.dump(positions, f, indent=4)
+
+print("✅ Exportación finalizada con coordenadas REALES.")

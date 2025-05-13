@@ -1,0 +1,43 @@
+import bpy
+import os
+
+# Ruta donde guardaste tus archivos GLB
+export_path = bpy.path.abspath("//models/toycar")
+
+# Asegúrate de que exista la carpeta destino
+if not os.path.exists(export_path):
+    os.makedirs(export_path)
+
+sources = []
+
+# Iterar por todos los objetos seleccionados (o cambiar por colección si prefieres)
+for obj in bpy.context.selected_objects:
+    name = obj.name.lower().replace(" ", "_")
+    filename = f"{name}.glb"
+    filepath = os.path.join(export_path, filename)
+
+    # Exportar el objeto individual como GLB
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.ops.export_scene.gltf(
+        filepath=filepath,
+        export_selected=True,
+        export_format='GLB'
+    )
+
+    # Crear entrada para sources.js
+    entry = f"""    {{
+        name: 'model_{name}',
+        type: 'gltfModel',
+        path: '/models/toycar/{filename}'
+    }}"""
+    sources.append(entry)
+
+# Escribir el archivo JS
+sources_js_path = os.path.join(export_path, "generated_sources.js")
+with open(sources_js_path, "w") as f:
+    f.write("export default [\n")
+    f.write(",\n".join(sources))
+    f.write("\n];\n")
+
+print(f"Archivo generado: {sources_js_path}")
