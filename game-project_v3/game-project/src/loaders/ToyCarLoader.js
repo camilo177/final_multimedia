@@ -125,20 +125,26 @@ export default class ToyCarLoader {
             }
     
             // 🎯 Si es un premio (coin)
-// En la parte que crea los coins
+            // En la parte que crea los coins
             if (block.name.startsWith('coin')) {
                // console.log('🧪 Revisando coin desde API:', block)
-                const prize = new Prize({
-                    model,
-                    position: new THREE.Vector3(block.x, block.y, block.z),
-                    scene: this.scene,
-                    role: block.role || "default"
-                });
-    
-                // 🔵 MARCAR modelo del premio
-                prize.model.userData.levelObject = true;
-    
-                this.prizes.push(prize);
+            const prize = new Prize({
+                model,
+                position: new THREE.Vector3(block.x, block.y, block.z),
+                scene: this.scene,
+                role: block.role || "default"
+            })
+
+            // 🔵 MARCAR modelo del premio
+            prize.model.userData.levelObject = true
+
+            // 🔴 Ocultar el coin final hasta que se recojan los default
+            if (prize.role === 'finalPrize' && prize.pivot) {
+                prize.pivot.visible = false
+            }
+
+            this.prizes.push(prize)
+
                 //this.scene.add(prize.model);
                 return;
             }
