@@ -10,6 +10,7 @@ export default class ToyCarLoader {
         this.resources = this.experience.resources;
         this.physics = this.experience.physics;
         this.prizes = [];
+        this.debug = false; // Activar para más logs
     }
 
     async loadFromAPI() {
@@ -17,26 +18,59 @@ export default class ToyCarLoader {
             const listRes = await fetch('/config/precisePhysicsModels.json');
             const precisePhysicsModels = await listRes.json();
 
+            // Get the current level
+            const currentLevel = this.experience.world.levelManager.currentLevel || 1;
+            console.log(`🌟 Loading level ${currentLevel}`);
+
             let blocks = [];
 
             try {
-                const apiUrl = import.meta.env.VITE_API_URL + '/api/blocks';
+                // Add level parameter to API URL
+                const apiUrl = `${import.meta.env.VITE_API_URL}/api/blocks?level=${currentLevel}`;
+                console.log(`📡 Fetching blocks from API: ${apiUrl}`);
+                
                 const res = await fetch(apiUrl);
 
                 if (!res.ok) throw new Error('Conexión fallida');
 
                 blocks = await res.json();
-                console.log('Datos cargados desde la API:', blocks.length);
+                console.log(`📦 Blocks for level ${currentLevel}: ${blocks.length}`);
+                
+                // Count and log coins that came from the API
+                const coinBlocks = blocks.filter(block => block.name && block.name.startsWith('coin'));
+                console.log(`🪙 Found ${coinBlocks.length} coins in API response`);
+                
+                // Modify the coin positions here before processing
+                // blocks = this._updateCoinPositions(blocks, currentLevel);
+                
             } catch (apiError) {
-                console.warn('No se pudo conectar con la API. Cargando desde archivo local...');
+                console.warn('⚠️ API connection failed. Loading from local file...');
                 const localRes = await fetch('/data/threejs_blocks.blocks.json');
-                blocks = await localRes.json();
-                console.log('Datos cargados desde archivo local:', blocks.length);
+                let allBlocks = await localRes.json();
+                
+                // Filter by current level
+                blocks = allBlocks.filter(block => block.level === currentLevel);
+                console.log(`📦 Blocks from local file for level ${currentLevel}: ${blocks.length}`);
+                
+                // Modify the coin positions here before processing
+                // blocks = this._updateCoinPositions(blocks, currentLevel);
+                
+                // If no coins found in blocks, add hardcoded fallbacks
+                const coinBlocks = blocks.filter(block => block.name && block.name.startsWith('coin'));
+                if (coinBlocks.length === 0) {
+                    console.warn('⚠️ No coins found in local blocks, adding fallback coins');
+                    
+                    // Use hardcoded fallbacks based on level
+                    const fallbackCoins = this._getDefaultCoinsForLevel(currentLevel);
+                    
+                    console.log(`🪙 Using fallback coins for level ${currentLevel}: ${fallbackCoins.length}`);
+                    blocks = [...blocks, ...fallbackCoins];
+                }
             }
 
             this._processBlocks(blocks, precisePhysicsModels);
         } catch (err) {
-            console.error('Error al cargar bloques o lista Trimesh:', err);
+            console.error('❌ Error loading blocks:', err);
         }
     }
 
@@ -45,22 +79,228 @@ export default class ToyCarLoader {
             const listRes = await fetch('/config/precisePhysicsModels.json');
             const precisePhysicsModels = await listRes.json();
 
-            const res = await fetch(apiUrl);
-            if (!res.ok) throw new Error('Conexión fallida al cargar bloques de nivel.');
+            // Get the current level
+            const currentLevel = this.experience.world.levelManager.currentLevel || 1;
+            
+            console.log(`🏗️ ToyCarLoader: Loading level ${currentLevel} from URL ${apiUrl}`);
+            
+            // Add level parameter to the URL if not already there
+            const levelUrl = apiUrl.includes('?') 
+                ? `${apiUrl}&level=${currentLevel}` 
+                : `${apiUrl}?level=${currentLevel}`;
 
-            const blocks = await res.json();
-            console.log(`📦 Bloques cargados (${blocks.length}) desde ${apiUrl}`);
+            console.log(`📡 Fetching blocks from URL: ${levelUrl}`);
+            const res = await fetch(levelUrl);
+            
+            if (!res.ok) throw new Error(`Conexión fallida al cargar bloques de nivel: ${res.status}`);
 
+            let blocks = await res.json();
+            console.log(`📦 Bloques cargados (${blocks.length}) desde ${levelUrl}`);
+            
+            // Update coin positions before processing
+            // blocks = this._updateCoinPositions(blocks, currentLevel);
+            
+            // Log coins that are already in the API response
+            const coinBlocks = blocks.filter(block => block.name && block.name.startsWith('coin'));
+            console.log(`🪙 Found ${coinBlocks.length} coins in API response`);
+            
+            if (coinBlocks.length > 0) {
+                coinBlocks.forEach((coin, index) => {
+                    console.log(`  ${index}: ${coin.name} at (${coin.x}, ${coin.y}, ${coin.z}), role: ${coin.role || 'default'}`);
+                });
+            } else {
+                console.warn('⚠️ No coins found in API response, adding fallbacks');
+                
+                // Add fallback coins if none found in API response
+                const fallbackCoins = this._getDefaultCoinsForLevel(currentLevel);
+                
+                console.log(`🪙 Using fallback coins for level ${currentLevel}: ${fallbackCoins.length}`);
+                blocks = [...blocks, ...fallbackCoins];
+            }
+            
+            if (this.debug) {
+                console.log('Sample blocks:', blocks.slice(0, 2));
+            }
+
+            // Log the number of level-specific models
+            const level1Models = blocks.filter(b => b.name && b.name.includes('_lev1')).length;
+            const level2Models = blocks.filter(b => b.name && b.name.includes('_lev2')).length;
+            console.log(`📊 Modelos nivel 1: ${level1Models}, Modelos nivel 2: ${level2Models}`);
+
+            // Add additional debug blocks if needed for level 2
+            if (currentLevel === 2 && blocks.length < 10) {
+                console.warn('⚠️ Muy pocos bloques en nivel 2, añadiendo bloques de debug');
+                // Add some debug blocks to level 2
+                blocks.push(
+                    {
+                        "name": "road-crossing_lev2",
+                        "x": 0,
+                        "y": 0,
+                        "z": 0,
+                        "level": 2
+                    },
+                    {
+                        "name": "road-curve_lev2",
+                        "x": 10,
+                        "y": 0,
+                        "z": 10,
+                        "level": 2
+                    }
+                );
+            }
+            
+            // If level 2 and still no blocks with lev2 suffix, add some manually
+            if (currentLevel === 2) {
+                const level2Blocks = blocks.filter(b => b.name && b.name.includes('_lev2')).length;
+                
+                if (level2Blocks < 5) {
+                    console.warn(`⚠️ Solo ${level2Blocks} bloques de nivel 2 encontrados, añadiendo bloques manuales`);
+                    
+                    // Add level 2 blocks manually at different positions
+                    const manualLevel2Blocks = [
+                        {
+                            "name": "road-crossing_lev2",
+                            "x": 0,
+                            "y": 0,
+                            "z": 0,
+                            "level": 2
+                        },
+                        {
+                            "name": "road-curve_lev2",
+                            "x": 10,
+                            "y": 0,
+                            "z": 10,
+                            "level": 2
+                        },
+                        {
+                            "name": "road-bend-sidewalk_lev2",
+                            "x": -10,
+                            "y": 0,
+                            "z": -10,
+                            "level": 2
+                        },
+                        {
+                            "name": "road-crossroad_lev2",
+                            "x": -10,
+                            "y": 0,
+                            "z": 10,
+                            "level": 2
+                        },
+                        {
+                            "name": "road-roundabout_lev2",
+                            "x": 10,
+                            "y": 0,
+                            "z": -10,
+                            "level": 2
+                        }
+                    ];
+                    
+                    blocks = [...blocks, ...manualLevel2Blocks];
+                    console.log(`📦 Añadidos ${manualLevel2Blocks.length} bloques manuales para nivel 2`);
+                }
+            }
+
+            console.log(`📊 Total bloques a procesar: ${blocks.length}`);
             this._processBlocks(blocks, precisePhysicsModels);
         } catch (err) {
-            console.error('Error al cargar bloques desde URL:', err);
+            console.error('❌ Error al cargar bloques desde URL:', err);
         }
     }
 
+    // Helper method to get default coins for a level
+    _getDefaultCoinsForLevel(level) {
+        if (level === 1) {
+            return [
+                {
+                    "name": "coin_structure_detailed_lev1",
+                    "x": -10,
+                    "y": 1,
+                    "z": 10,
+                    "level": 1,
+                    "role": "default"
+                },
+                {
+                    "name": "coin_structure_detailed_lev1",
+                    "x": 5,
+                    "y": 1,
+                    "z": 5,
+                    "level": 1,
+                    "role": "default"
+                },
+                {
+                    "name": "coin_structure_detailed_lev1",
+                    "x": 10,
+                    "y": 1,
+                    "z": -10,
+                    "level": 1,
+                    "role": "finalPrize"
+                }
+            ];
+        } else {
+            return [
+                {
+                    "name": "coin_structure_detailed_lev2",
+                    "x": -15,
+                    "y": 1,
+                    "z": 15,
+                    "level": 2,
+                    "role": "default"
+                },
+                {
+                    "name": "coin_structure_detailed_lev2",
+                    "x": 15,
+                    "y": 1,
+                    "z": 15,
+                    "level": 2,
+                    "role": "default"
+                },
+                {
+                    "name": "coin_structure_detailed_lev2",
+                    "x": 0,
+                    "y": 1,
+                    "z": -15,
+                    "level": 2,
+                    "role": "finalPrize"
+                }
+            ];
+        }
+    }
+
+    // // New method to update coin positions in the blocks array
+    // _updateCoinPositions(blocks, level) {
+    //     const coinBlocks = blocks.filter(block => block.name && block.name.startsWith('coin'));
+    //     console.log(`🛠️ Updating ${coinBlocks.length} coin positions for level ${level}`);
+        
+    //     if (coinBlocks.length === 0) {
+    //         return blocks; // No coins to update
+    //     }
+        
+    //     // Remove existing coins
+    //     const nonCoinBlocks = blocks.filter(block => !block.name || !block.name.startsWith('coin'));
+        
+    //     // Replace with new coins at better positions
+    //     const newCoins = this._getDefaultCoinsForLevel(level);
+        
+    //     console.log(`🪙 Replaced ${coinBlocks.length} coins with ${newCoins.length} new coins at better positions`);
+    //     newCoins.forEach((coin, index) => {
+    //         console.log(`  ${index}: ${coin.name} at (${coin.x}, ${coin.y}, ${coin.z}), role: ${coin.role || 'default'}`);
+    //     });
+        
+    //     return [...nonCoinBlocks, ...newCoins];
+    // }
+
     _processBlocks(blocks, precisePhysicsModels) {
+        // Clear previous prizes when loading a new level
+        this.prizes = [];
+        
+        let processedCount = 0;
+        let skippedCount = 0;
+        let coinCount = 0;
+        
         blocks.forEach(block => {
             if (!block.name) {
                 console.warn('Bloque sin nombre:', block);
+                skippedCount++;
                 return;
             }
     
@@ -69,6 +309,7 @@ export default class ToyCarLoader {
     
             if (!glb) {
                 console.warn(`Modelo no encontrado: ${resourceKey}`);
+                skippedCount++;
                 return;
             }
     
@@ -125,31 +366,32 @@ export default class ToyCarLoader {
             }
     
             // 🎯 Si es un premio (coin)
-            // En la parte que crea los coins
             if (block.name.startsWith('coin')) {
-               // console.log('🧪 Revisando coin desde API:', block)
-            const prize = new Prize({
-                model,
-                position: new THREE.Vector3(block.x, block.y, block.z),
-                scene: this.scene,
-                role: block.role || "default"
-            })
+                console.log(`🪙 Processing coin: ${block.name}, level: ${block.level}, role: ${block.role || "default"}, position: (${block.x}, ${block.y}, ${block.z})`);
+                coinCount++;
+                
+                const prize = new Prize({
+                    model,
+                    position: new THREE.Vector3(block.x, block.y, block.z),
+                    scene: this.scene,
+                    role: block.role || "default"
+                });
 
-            // 🔵 MARCAR modelo del premio
-            prize.model.userData.levelObject = true
+                // 🔵 MARCAR modelo del premio
+                prize.model.userData.levelObject = true;
 
-            // 🔴 Ocultar el coin final hasta que se recojan los default
-            if (prize.role === 'finalPrize' && prize.pivot) {
-                prize.pivot.visible = false
-            }
+                // 🔴 Ocultar el coin final hasta que se recojan los default
+                if (prize.role === 'finalPrize' && prize.pivot) {
+                    prize.pivot.visible = false;
+                }
 
-            this.prizes.push(prize)
-
-                //this.scene.add(prize.model);
+                this.prizes.push(prize);
+                processedCount++;
                 return;
             }
     
             this.scene.add(model);
+            processedCount++;
     
             // Físicas
             let shape;
@@ -186,6 +428,7 @@ export default class ToyCarLoader {
             body.userData.linkedModel = model; 
             this.physics.world.addBody(body);
         });
+        
+        console.log(`📊 Resumen de carga: Procesados ${processedCount}, Ignorados ${skippedCount}, Monedas ${coinCount}`);
     }
-    
 }

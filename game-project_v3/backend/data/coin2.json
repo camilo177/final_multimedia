@@ -6,7 +6,6 @@
         "z": 38,
         "level": 2,
         "role": "default"
-
     },
     {
         "name": "coin_structure_detailed_lev2",
@@ -15,16 +14,13 @@
         "z": 38,
         "level": 2,
         "role": "default"
-
     },
-
     {
         "name": "coin_structure_detailed_lev2",
         "x": 16,
-        "y": 1,
+        "y": 3,
         "z": -39,
         "level": 2,
         "role": "finalPrize"
     }
-
 ]

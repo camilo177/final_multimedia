@@ -3,7 +3,7 @@
         "name": "coin_structure_detailed_lev1",
         "x": 25,
         "y": 1,
-        "z": 38,
+        "z": 50,
         "level": 1,
         "role": "default"
     },
@@ -11,9 +11,16 @@
         "name": "coin_structure_detailed_lev1",
         "x": 16,
         "y": 1,
-        "z": -39,
+        "z": 38,
+        "level": 1,
+        "role": "default"
+    },
+    {
+        "name": "coin_structure_detailed_lev1",
+        "x": 46,  
+        "y": 2,
+        "z": 42,
         "level": 1,
         "role": "finalPrize"
     }
-   
 ]

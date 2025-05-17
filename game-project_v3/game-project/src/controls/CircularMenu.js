@@ -113,6 +113,26 @@ export default class CircularMenu {
     })
     document.body.appendChild(this.timer)
 
+    // HUD: Nivel actual
+    this.levelIndicator = document.createElement('div')
+    this.levelIndicator.id = 'hud-level'
+    this.levelIndicator.innerText = '🎮 Nivel: 1'
+    Object.assign(this.levelIndicator.style, {
+      position: 'fixed',
+      top: '60px',
+      left: '16px',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      background: 'rgba(0,0,0,0.6)',
+      color: 'white',
+      padding: '6px 12px',
+      borderRadius: '8px',
+      zIndex: 9999,
+      fontFamily: 'monospace',
+      pointerEvents: 'none'
+    })
+    document.body.appendChild(this.levelIndicator)
+
     // HUD: Puntos
     this.status = document.createElement('div')
     this.status.id = 'hud-points'
@@ -239,14 +259,15 @@ export default class CircularMenu {
   }
 
   setTimer(seconds) {
-    if (this.timer) this.timer.innerText = `⏱ ${seconds}s`
+    if (this.timer) this.timer.innerText = `⏱ ${Math.floor(seconds)}s`
   }
 
-  //Contador jugadores
+  setLevel(level) {
+    if (this.levelIndicator) this.levelIndicator.innerText = `🎮 Nivel: ${level}`
+  }
+
   setPlayerCount(count) {
-    if (this.playersLabel) {
-      this.playersLabel.innerText = `👥 Jugadores: ${count}`
-    }
+    if (this.playersLabel) this.playersLabel.innerText = `👥 Jugadores: ${count}`
   }
   
 
@@ -255,5 +276,8 @@ export default class CircularMenu {
     this.actionButtons?.forEach(btn => btn.remove())
     this.timer?.remove()
     this.status?.remove()
+    this.playersLabel?.remove()
+    this.levelIndicator?.remove()
+    this.aboutContainer?.remove()
   }
 }

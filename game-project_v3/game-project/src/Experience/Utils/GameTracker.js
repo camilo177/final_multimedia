@@ -1,5 +1,3 @@
-// src/utils/GameTracker.js
-
 export default class GameTracker {
     constructor({ modal, menu }) {
         this.modal = modal
@@ -51,6 +49,90 @@ export default class GameTracker {
 
     getBestTimes() {
         return JSON.parse(localStorage.getItem('bestTimes') || '[]')
+    }
+
+    // Nuevo método para mostrar el modal de nivel completado
+    showLevelUpModal(nivel) {
+        console.log(`🎮 Mostrando modal de nivel ${nivel} completado`)
+        
+        // Usar el modal existente si está disponible
+        if (this.modal && typeof this.modal.show === 'function') {
+            this.modal.show({
+                icon: '🌟',
+                message: `¡Nivel ${nivel-1} completado!\n¡Prepárate para el siguiente nivel!`,
+                buttons: [
+                    {
+                        text: '▶️ Continuar',
+                        onClick: () => {
+                            this.modal.hide()
+                        }
+                    }
+                ]
+            })
+        } else {
+            // Si no hay modal disponible, crear uno simple
+            const modalContainer = document.createElement('div')
+            modalContainer.id = 'level-up-modal'
+            
+            Object.assign(modalContainer.style, {
+                position: 'fixed',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: '9999'
+            })
+            
+            const modalContent = document.createElement('div')
+            Object.assign(modalContent.style, {
+                backgroundColor: 'white',
+                padding: '30px',
+                borderRadius: '10px',
+                textAlign: 'center',
+                maxWidth: '80%'
+            })
+            
+            const titulo = document.createElement('h2')
+            titulo.textContent = `¡Nivel ${nivel-1} Completado!`
+            titulo.style.marginBottom = '20px'
+            
+            const mensaje = document.createElement('p')
+            mensaje.textContent = `Prepárate para el siguiente nivel...`
+            mensaje.style.marginBottom = '30px'
+            
+            const boton = document.createElement('button')
+            boton.textContent = 'Continuar'
+            Object.assign(boton.style, {
+                padding: '10px 20px',
+                backgroundColor: '#00fff7',
+                color: '#000',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px'
+            })
+            
+            boton.onclick = () => {
+                document.body.removeChild(modalContainer)
+            }
+            
+            modalContent.appendChild(titulo)
+            modalContent.appendChild(mensaje)
+            modalContent.appendChild(boton)
+            modalContainer.appendChild(modalContent)
+            document.body.appendChild(modalContainer)
+            
+            // Remover automáticamente después de un tiempo
+            setTimeout(() => {
+                if (document.body.contains(modalContainer)) {
+                    document.body.removeChild(modalContainer)
+                }
+            }, 5000)
+        }
     }
 
     //Modal de fin de juego
@@ -192,6 +274,4 @@ export default class GameTracker {
             this.timerElement = null
         }
     }
-
-
 }

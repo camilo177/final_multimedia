@@ -869,16 +869,6 @@ export default [
         "path": "/models/toycar/tree-pine-large.012_lev1.glb"
     },
     {
-        "name": "baked_lev1_lev2",
-        "type": "gltfModel",
-        "path": "/models/toycar/baked_lev1_lev2.glb"
-    },
-    {
-        "name": "baked_lev1_lev2",
-        "type": "gltfModel",
-        "path": "/models/toycar/baked_lev1_lev2.glb"
-    },
-    {
         "name": "campfire_cylinder.009_lev2",
         "type": "gltfModel",
         "path": "/models/toycar/campfire_cylinder.009_lev2.glb"

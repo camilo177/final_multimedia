@@ -44,7 +44,7 @@ export default class Robot {
             shape: shape,
             //position: new CANNON.Vec3(4, 1, 0), // Apenas sobre el piso real (que termina en y=0)
             position: new CANNON.Vec3(0, 1.2, 0),
-            linearDamping: 0.05,
+            linearDamping: 0.03,
             angularDamping: 0.9
         })
 
@@ -118,12 +118,12 @@ export default class Robot {
         this.animation.mixer.update(delta)
 
         const keys = this.keyboard.getState()
-        const moveForce = 80
+        const moveForce = 120
         const turnSpeed = 2.5
         let isMoving = false
 
         // Limitar velocidad si es demasiado alta
-        const maxSpeed = 15
+        const maxSpeed = 20
         this.body.velocity.x = Math.max(Math.min(this.body.velocity.x, maxSpeed), -maxSpeed)
         this.body.velocity.z = Math.max(Math.min(this.body.velocity.z, maxSpeed), -maxSpeed)
 
