@@ -47,6 +47,11 @@ export default [
         "path": "/models/toycar/baked_lev1.glb"
     },
     {
+        "name": "baked_lev1_lev2",
+        "type": "gltfModel",
+        "path": "/models/toycar/baked_lev1_lev2.glb"
+    },
+    {
         "name": "barn_lev1",
         "type": "gltfModel",
         "path": "/models/toycar/barn_lev1.glb"

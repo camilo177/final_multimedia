@@ -66,7 +66,7 @@ export default class World {
                 this.robot = new Robot(this.experience, 'robotModel')
                 } else {
                 // For testing, force use the lion model
-                const modelType = 'lionModel'  // Change this to test different models
+                const modelType = 'robotModel'  // Aqui cambias para que cambie el modelo)
                 
                 console.log(`🎯 Selecting model: ${modelType}`)
                 console.log(`📦 Does it exist?: ${this.resources.items[modelType] ? 'YES' : 'NO'}`)

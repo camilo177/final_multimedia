@@ -52,7 +52,7 @@ export default class Experience {
     this.renderer = new Renderer(this)
 
     // Socket
-    this.socketManager = new SocketManager(this)
+   // this.socketManager = new SocketManager(this) Este dejalo asi
 
     // Raycaster
     this.raycaster = new Raycaster(this)
