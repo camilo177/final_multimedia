@@ -1333,6 +1333,12 @@ export default [
         "name": "tree_cylinder.002_lev2",
         "type": "gltfModel",
         "path": "/models/toycar/tree_cylinder.002_lev2.glb"
-    }
+    },
+    {
+        "name": "image2Model",
+        "type": "gltfModel",
+        "path": "/models/image2/image2.glb"
+}
+
 ];
       
