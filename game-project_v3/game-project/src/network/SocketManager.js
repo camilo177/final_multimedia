@@ -19,6 +19,32 @@ export default class SocketManager {
             this.socket.emit('new-player', { position: initialPos })
         })
 
+        // Manejar rechazo de conexión por límite de jugadores
+        this.socket.on('connection-rejected', (data) => {
+            console.log('⛔ Conexión rechazada:', data.reason)
+            
+            // Mostrar modal informativo
+            if (this.experience.modal) {
+                this.experience.modal.show({
+                    icon: '⛔',
+                    message: data.reason,
+                    buttons: [
+                        {
+                            text: '🔄 Reintentar',
+                            onClick: () => {
+                                this.socket.connect()
+                            }
+                        }
+                    ]
+                })
+            }
+            
+            // Actualizar HUD
+            if (this.experience.menu?.playersLabel) {
+                this.experience.menu.playersLabel.innerText = '👥 Servidor lleno'
+            }
+        })
+
         this.socket.on('spawn-player', (data) => {
             if (data.id === this.socket.id) return
 
@@ -94,43 +120,75 @@ export default class SocketManager {
     }
 
 
+    // In SocketManager.js
     _createRemoteRobot(id, position) {
-        const original = this.experience.resources.items.robotModel
-
-        if (!original || !original.scene || !original.animations) {
-            console.warn('⚠️ robotModel no está completamente cargado')
+        // Array of model types
+        const modelTypes = ['robotModel', 'foxModel', 'lionModel', 'elephantModel']
+        
+        // Assign model based on number of existing players
+        const playerCount = Object.keys(this.players || {}).length || 0
+        const modelType = modelTypes[playerCount % modelTypes.length]
+        
+        // Try to get the selected model resource
+        const modelResource = this.experience.resources.items[modelType]
+        
+        if (!modelResource || !modelResource.scene) {
+            console.warn(`Model ${modelType} not found for remote player ${id}`)
             return
         }
-
-        const model = original.scene.clone()
-        model.scale.set(0.3, 0.3, 0.3)
+        
+        // Clone the model
+        const model = modelResource.scene.clone()
+        
+        // Apply scaling based on model type
+        if (modelType === 'robotModel') {
+            model.scale.set(0.3, 0.3, 0.3)
+        } else if (modelType === 'foxModel') {
+            model.scale.set(0.02, 0.02, 0.02)
+        } else if (modelType === 'lionModel') {
+            model.scale.set(0.05, 0.05, 0.05)
+        } else if (modelType === 'elephantModel') {
+            model.scale.set(0.05, 0.05, 0.05)
+        }
+        
         model.position.set(position.x, position.y, position.z)
-
-        // 🎨 Color aleatorio por jugador
-        model.traverse(child => {
-            if (child.isMesh) {
-                child.material = child.material.clone()
-                child.material.color = new THREE.Color(Math.random(), Math.random(), Math.random())
-            }
-        })
-
-        // 🎞️ Añadir animación
+        
+        // Setup animation mixer
         const mixer = new THREE.AnimationMixer(model)
-        const idleClip = original.animations.find(clip => clip.name.toLowerCase().includes('idle')) || original.animations[0]
-        const action = mixer.clipAction(idleClip)
-        action.play()
-
-        // Guardamos el robot con sus datos
+        
+        // Try to find and play idle animation
+        let idleAnimation
+        if (modelResource.animations && modelResource.animations.length > 0) {
+            idleAnimation = modelResource.animations[0]
+        } else if (this.experience.resources.items.robotModel.animations) {
+            // Fallback to robot animations
+            idleAnimation = this.experience.resources.items.robotModel.animations[2]
+        }
+        
+        if (idleAnimation) {
+            const action = mixer.clipAction(idleAnimation)
+            action.play()
+        }
+        
+        // Save to robots object
         this.robots[id] = {
             model,
-            mixer
+            mixer,
+            modelType
         }
-
+        
         this.scene.add(model)
-
-        // 🏷️ Etiqueta sobre el jugador
+        
+        // Create player label
         const label = document.createElement('div')
-        label.textContent = `🧍 ${id.slice(0, 4)}`
+        
+        // Change emoji based on model type
+        let emoji = '🤖' // Default robot
+        if (modelType === 'foxModel') emoji = '🦊'
+        else if (modelType === 'lionModel') emoji = '🦁'
+        else if (modelType === 'elephantModel') emoji = '🐘'
+        
+        label.textContent = `${emoji} ${id.slice(0, 4)}`
         Object.assign(label.style, {
             position: 'absolute',
             color: 'white',
@@ -141,7 +199,6 @@ export default class SocketManager {
             pointerEvents: 'none'
         })
         document.body.appendChild(label)
-
         model.userData.label = label
     }
 

@@ -46,10 +46,22 @@ const io = socketio(server, {
 // Almacén temporal de jugadores
 let players = {}
 
+// Constante para el límite máximo de jugadores
+const MAX_PLAYERS = 5
+
 io.on('connection', (socket) => {
     console.log(`🟢 Usuario conectado: ${socket.id}`)
 
     socket.on('new-player', (data) => {
+        // Verificar si se alcanzó el límite de jugadores
+        if (Object.keys(players).length >= MAX_PLAYERS) {
+            console.log(`⛔ Conexión rechazada: límite de ${MAX_PLAYERS} jugadores alcanzado`)
+            socket.emit('connection-rejected', {
+                reason: `El servidor ha alcanzado el límite máximo de ${MAX_PLAYERS} jugadores concurrentes.`
+            })
+            return
+        }
+
         console.log(`👤 Jugador inicializado: ${socket.id}`, data)
 
         players[socket.id] = {
@@ -81,7 +93,6 @@ io.on('connection', (socket) => {
             }))
 
         socket.emit('existing-players', others)
-
     })
 
     socket.on('update-position', ({ position, rotation }) => {

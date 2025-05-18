@@ -50,12 +50,36 @@ export default class World {
             this.loader = new ToyCarLoader(this.experience)
             await this.loader.loadFromAPI()
 
-            this.fox = new Fox(this.experience)
-            this.robot = new Robot(this.experience)
+            const modelTypes = ['robotModel', 'foxModel', 'lionModel', 'elephantModel']
+            const playerCount = Object.keys(this.experience.socketManager?.players || {}).length || 0
+            const modelType = modelTypes[playerCount % modelTypes.length]
+
+            this.robot = new Robot(this.experience, modelType)
+
+            const availableModels = ['robotModel', 'foxModel', 'lionModel', 'elephantModel']
+                .filter(model => this.resources.items[model] !== undefined)
+
+                console.log('📋 Available models:', availableModels)
+
+                if (availableModels.length === 0) {
+                console.error('❌ No models available! Defaulting to robot')
+                this.robot = new Robot(this.experience, 'robotModel')
+                } else {
+                // For testing, force use the lion model
+                const modelType = 'lionModel'  // Change this to test different models
+                
+                console.log(`🎯 Selecting model: ${modelType}`)
+                console.log(`📦 Does it exist?: ${this.resources.items[modelType] ? 'YES' : 'NO'}`)
+                
+                this.robot = new Robot(this.experience, modelType)
+                }
+
 
             this.experience.tracker.showCancelButton()
             this.experience.vr.bindCharacter(this.robot)
             this.thirdPersonCamera = new ThirdPersonCamera(this.experience, this.robot.group)
+
+            
 
             this.mobileControls = new MobileControls({
                 onUp: (pressed) => { this.experience.keyboard.keys.up = pressed },
@@ -76,7 +100,9 @@ export default class World {
         this.blockPrefab?.update()
 
         if (this.totalDefaultCoins === undefined && this.loader?.prizes?.length) {
-            this.totalDefaultCoins = this.loader.prizes.filter(p => p.role === "default").length
+            this.totalDefaultCoins = this.loader.prizes.filter(p => p.role === "default").length;
+            this.targetPointsForLevel = this.totalDefaultCoins; // How many points needed to complete this level
+            console.log(`🎮 Level ${this.levelManager.currentLevel}: ${this.totalDefaultCoins} coins to collect`);
         }
 
         if (this.thirdPersonCamera && this.experience.isThirdPerson && !this.experience.renderer.instance.xr.isPresenting) {

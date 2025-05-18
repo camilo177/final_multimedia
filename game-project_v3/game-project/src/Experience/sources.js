@@ -32,6 +32,16 @@ export default [
         path: '/models/Robot/Robot.glb'
     },
     {
+        name: 'lionModel',
+        type: 'gltfModel',
+        path: '/models/Lion/lion.glb'
+    },
+    {
+        name: 'elephantModel',
+        type: 'gltfModel',
+        path: '/models/Elephant/elephant.glb'
+    },
+    {
         "name": "baked_lev1",
         "type": "gltfModel",
         "path": "/models/toycar/baked_lev1.glb"

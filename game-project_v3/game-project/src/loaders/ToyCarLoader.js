@@ -364,17 +364,26 @@ export default class ToyCarLoader {
                     }
                 });
             }
-    
-            // 🎯 Si es un premio (coin)
+            
             if (block.name.startsWith('coin')) {
-                console.log(`🪙 Processing coin: ${block.name}, level: ${block.level}, role: ${block.role || "default"}, position: (${block.x}, ${block.y}, ${block.z})`);
+                // Extract the value property with fallback to 1
+                const coinValue = block.value !== undefined ? block.value : 1;
+                
+                console.log(`🪙 Processing coin: ${block.name}, level: ${block.level}, role: ${block.role || "default"}, position: (${block.x}, ${block.y}, ${block.z}), value: ${coinValue}`);
                 coinCount++;
                 
                 const prize = new Prize({
                     model,
                     position: new THREE.Vector3(block.x, block.y, block.z),
                     scene: this.scene,
-                    role: block.role || "default"
+                    role: block.role || "default",
+                    value: coinValue,
+                    id: block._id || null,
+                    metadata: {
+                        level: block.level,
+                        name: block.name,
+                        // Any other properties you want to keep
+                    }
                 });
 
                 // 🔵 MARCAR modelo del premio
@@ -389,7 +398,7 @@ export default class ToyCarLoader {
                 processedCount++;
                 return;
             }
-    
+                
             this.scene.add(model);
             processedCount++;
     
