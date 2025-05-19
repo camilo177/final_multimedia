@@ -1,5 +1,5 @@
-**Toy Car Adventure - Juego 3D Multijugador
-**
+Toy Car Adventure - Juego 3D Multijugador
+
 📋 Descripción
 Toy Car Adventure es un juego 3D interactivo desarrollado como proyecto integrado para las asignaturas de Programación Orientada a Entornos Multimedia e Ingeniería Web. El juego combina tecnologías modernas de desarrollo web y diseño 3D para crear una experiencia inmersiva donde los jugadores exploran escenarios, recolectan monedas y compiten entre sí.
 El proyecto implementa una arquitectura orientada a componentes basada en Three.js y React para el frontend, junto con MongoDB y Socket.IO para el backend, permitiendo funcionalidades multijugador en tiempo real.
