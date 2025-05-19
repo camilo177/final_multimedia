@@ -1,193 +1,239 @@
 // src/network/SocketManager.js
 import * as THREE from 'three'
 import { io } from 'socket.io-client'
+import EventEmitter from '../Experience/Utils/EventEmitter.js'
 
-export default class SocketManager {
+export default class SocketManager extends EventEmitter {
     constructor(experience) {
+        super()
+        
         this.experience = experience
         this.scene = this.experience.scene
         this.robots = {}
+        this.players = {}
+        this.modelTypes = ['robotModel', 'foxModel', 'robotModel', 'foxModel', 'robotModel']
+        
         this.socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', {
-            autoConnect: true, // permite conectar cuando queramos
-            reconnection: false // ❌ evita que reconecte automáticamente
+            autoConnect: true,
+            reconnection: true,
+            reconnectionAttempts: 5
         })
-        console.log(import.meta.env.VITE_API_URL)
+        
+        console.log('🔌 SocketManager: Connecting to server...')
+        
+        // Set up socket event handlers
         this.socket.on('connect', () => {
-            console.log('🔌 Conectado a servidor:', this.socket.id)
-
-            const initialPos = this.experience.world.robot?.body?.position || { x: 0, y: 0, z: 0 }
-            this.socket.emit('new-player', { position: initialPos })
+            console.log('🔌 Connected to server:', this.socket.id)
+            
+            // Wait for the robot to be created
+            const checkRobot = () => {
+                if (this.experience.world?.robot?.body) {
+                    const initialPos = this.experience.world.robot.body.position
+                    
+                    // Determine which model to use
+                    const playerCount = Object.keys(this.players).length
+                    const modelType = this.modelTypes[playerCount % this.modelTypes.length]
+                    
+                    console.log(`🤖 Joining as player #${playerCount + 1} with model: ${modelType}`)
+                    
+                    // Send info to server
+                    this.socket.emit('new-player', { 
+                        position: initialPos,
+                        modelType: modelType
+                    })
+                } else {
+                    setTimeout(checkRobot, 500)
+                }
+            }
+            
+            checkRobot()
         })
-
-        // Manejar rechazo de conexión por límite de jugadores
+        
+        // Handle connection rejection (player limit exceeded)
         this.socket.on('connection-rejected', (data) => {
-            console.log('⛔ Conexión rechazada:', data.reason)
+            console.warn('⛔ Connection rejected:', data.reason)
             
-            // Mostrar modal informativo
-            if (this.experience.modal) {
-                this.experience.modal.show({
-                    icon: '⛔',
-                    message: data.reason,
-                    buttons: [
-                        {
-                            text: '🔄 Reintentar',
-                            onClick: () => {
-                                this.socket.connect()
-                            }
-                        }
-                    ]
-                })
-            }
+            // Show error modal
+            this._showConnectionError(data.reason)
             
-            // Actualizar HUD
+            // Update player count display
             if (this.experience.menu?.playersLabel) {
-                this.experience.menu.playersLabel.innerText = '👥 Servidor lleno'
+                this.experience.menu.playersLabel.innerText = '👥 Server Full (5/5)'
             }
         })
-
+        
+        // Handle updated player list
+        this.socket.on('players-update', (players) => {
+            this.players = players
+            const total = Object.keys(players).length
+            console.log('👥 Players connected:', total)
+            
+            // Update player counter
+            if (this.experience.menu?.playersLabel) {
+                this.experience.menu.playersLabel.innerText = `👥 Players: ${total}/5`
+            }
+            
+            // Trigger event for other components
+            this.trigger('players-update', players)
+        })
+        
+        // New player joins
         this.socket.on('spawn-player', (data) => {
             if (data.id === this.socket.id) return
-
-            console.log('🧍 Nuevo jugador:', data.id)
-            this._createRemoteRobot(data.id, data.position)
+            
+            console.log(`👤 New player joined: ${data.id} with model ${data.modelType || 'robotModel'}`)
+            this._createRemotePlayer(data.id, data.position, data.rotation, data.modelType)
+            
+            // Let World.js know
+            this.trigger('player-joined', data.id, data.modelType)
         })
-
-        this.socket.on('players-update', (players) => {
-            const total = Object.keys(players).length
-            console.log('📡 Jugadores conectados:', total)
-
-            // ✅ Actualizar HUD si existe el menú
-            if (this.experience.menu?.playersLabel) {
-                this.experience.menu.playersLabel.innerText = `👥 Jugadores: ${total}`
-            }
-        })
-
-
-
+        
+        // Remote player moves
         this.socket.on('update-player', ({ id, position, rotation }) => {
+            if (id === this.socket.id) return
+            
             const remote = this.robots[id]
-            if (id !== this.socket.id && remote) {
+            if (remote && remote.model) {
                 remote.model.position.set(position.x, position.y, position.z)
                 remote.model.rotation.y = rotation
             }
+            
+            // Let World.js know
+            this.trigger('player-transform', id, position, rotation)
         })
-
+        
+        // Player disconnects
         this.socket.on('remove-player', (id) => {
-            const data = this.robots[id]
-          
-            if (data) {
-              if (data.model) {
-                // 1. Quitar de la escena
-                this.scene.remove(data.model)
-          
-                // 2. Liberar geometría y materiales
-                data.model.traverse(child => {
-                  if (child.isMesh) {
-                    child.geometry?.dispose()
-                    if (Array.isArray(child.material)) {
-                      child.material.forEach(m => m.dispose?.())
-                    } else {
-                      child.material?.dispose?.()
-                    }
-                  }
-                })
-          
-                // 3. Eliminar etiqueta flotante
-                data.model.userData.label?.remove()
-              }
-          
-              // 4. Eliminar del registro
-              delete this.robots[id]
+            if (this.robots[id]) {
+                console.log(`👋 Player disconnected: ${id}`)
+                this._removeRemotePlayer(id)
+                
+                // Let World.js know
+                this.trigger('player-removed', id)
             }
-          })
-          
-
+        })
+        
+        // Get existing players
         this.socket.on('existing-players', (others) => {
+            console.log(`🌎 Found ${others.length} existing players`)
+            
             others.forEach(data => {
-                if (data.id !== this.socket.id && !this.robots[data.id]) {
-                    this._createRemoteRobot(data.id, data.position, data.rotation, data.color)
+                if (data.id !== this.socket.id) {
+                    console.log(`📝 Adding existing player: ${data.id} with model ${data.modelType || 'robotModel'}`)
+                    this._createRemotePlayer(data.id, data.position, data.rotation, data.modelType)
                 }
             })
         })
-
+        
+        // Debug info
+        this.debugInterval = setInterval(() => {
+            const playerCount = Object.keys(this.players).length
+            const robotCount = Object.keys(this.robots).length
+            console.log(`[🌐 MULTIPLAYER] Connected: ${this.socket.connected}, Players: ${playerCount}/5, Remote robots: ${robotCount}`)
+        }, 10000) // Log every 10 seconds
     }
-
-    sendTransform(position, rotationY) {
-        this.socket.emit('update-position', {
-            position,
-            rotation: rotationY
-        })
+    
+    _showConnectionError(message) {
+        if (this.experience.modal) {
+            this.experience.modal.show({
+                icon: '⛔',
+                message: message || 'Connection error',
+                buttons: [
+                    {
+                        text: '🔄 Retry Connection',
+                        onClick: () => {
+                            this.socket.connect()
+                        }
+                    }
+                ]
+            })
+        }
     }
-
-
-    // In SocketManager.js
-    _createRemoteRobot(id, position) {
-        // Array of model types
-        const modelTypes = ['robotModel', 'foxModel', 'lionModel', 'elephantModel']
-        
-        // Assign model based on number of existing players
-        const playerCount = Object.keys(this.players || {}).length || 0
-        const modelType = modelTypes[playerCount % modelTypes.length]
-        
-        // Try to get the selected model resource
-        const modelResource = this.experience.resources.items[modelType]
-        
-        if (!modelResource || !modelResource.scene) {
-            console.warn(`Model ${modelType} not found for remote player ${id}`)
+    
+    _createRemotePlayer(id, position, rotation = 0, modelType = 'robotModel') {
+        // Check if player already exists
+        if (this.robots[id]) {
+            console.warn(`⚠️ Player ${id} already exists`)
             return
         }
         
-        // Clone the model
-        const model = modelResource.scene.clone()
+        console.log(`🤖 Creating remote player: ${id} with model ${modelType}`)
         
-        // Apply scaling based on model type
-        if (modelType === 'robotModel') {
-            model.scale.set(0.3, 0.3, 0.3)
-        } else if (modelType === 'foxModel') {
-            model.scale.set(0.02, 0.02, 0.02)
-        } else if (modelType === 'lionModel') {
-            model.scale.set(0.05, 0.05, 0.05)
-        } else if (modelType === 'elephantModel') {
-            model.scale.set(0.05, 0.05, 0.05)
+        // Default model is robotModel
+        let modelResource = this.experience.resources.items.robotModel
+        let scale = 0.3
+        let yOffset = 0
+        let emoji = '🤖'
+        
+        // Select appropriate model based on type
+        if (modelType === 'foxModel' && this.experience.resources.items.foxModel) {
+            modelResource = this.experience.resources.items.foxModel
+            scale = 0.02
+            yOffset = 0.1
+            emoji = '🦊'
         }
         
-        model.position.set(position.x, position.y, position.z)
+        // Ensure model is available
+        if (!modelResource || !modelResource.scene) {
+            console.error(`❌ Model '${modelType}' not found`)
+            return
+        }
         
-        // Setup animation mixer
+        // Clone model
+        const model = modelResource.scene.clone()
+        model.scale.set(scale, scale, scale)
+        model.position.set(position.x, position.y + yOffset, position.z)
+        
+        if (rotation) {
+            model.rotation.y = rotation
+        }
+        
+        // Random color for player identification
+        const playerColor = new THREE.Color(
+            Math.random() * 0.5 + 0.5,
+            Math.random() * 0.5 + 0.5,
+            Math.random() * 0.5 + 0.5
+        )
+        
+        // Apply color to model materials
+        model.traverse(child => {
+            if (child instanceof THREE.Mesh) {
+                child.material = child.material.clone()
+                child.material.color = playerColor
+                child.castShadow = true
+            }
+        })
+        
+        // Set up animation
         const mixer = new THREE.AnimationMixer(model)
         
-        // Try to find and play idle animation
-        let idleAnimation
+        // Find appropriate idle animation
         if (modelResource.animations && modelResource.animations.length > 0) {
-            idleAnimation = modelResource.animations[0]
-        } else if (this.experience.resources.items.robotModel.animations) {
-            // Fallback to robot animations
-            idleAnimation = this.experience.resources.items.robotModel.animations[2]
-        }
-        
-        if (idleAnimation) {
+            let idleAnimation = modelResource.animations.find(
+                anim => anim.name.toLowerCase().includes('idle')
+            )
+            
+            // If no idle animation, use first one
+            if (!idleAnimation) {
+                idleAnimation = modelResource.animations[0]
+            }
+            
             const action = mixer.clipAction(idleAnimation)
             action.play()
         }
         
-        // Save to robots object
+        // Add to scene
+        this.scene.add(model)
+        
+        // Store player
         this.robots[id] = {
             model,
             mixer,
             modelType
         }
         
-        this.scene.add(model)
-        
-        // Create player label
+        // Create floating name tag
         const label = document.createElement('div')
-        
-        // Change emoji based on model type
-        let emoji = '🤖' // Default robot
-        if (modelType === 'foxModel') emoji = '🦊'
-        else if (modelType === 'lionModel') emoji = '🦁'
-        else if (modelType === 'elephantModel') emoji = '🐘'
-        
         label.textContent = `${emoji} ${id.slice(0, 4)}`
         Object.assign(label.style, {
             position: 'absolute',
@@ -199,23 +245,92 @@ export default class SocketManager {
             pointerEvents: 'none'
         })
         document.body.appendChild(label)
+        
+        // Store label reference
         model.userData.label = label
     }
-
-
-
+    
+    _removeRemotePlayer(id) {
+        const robotData = this.robots[id]
+        if (!robotData) return
+        
+        // Remove from scene
+        if (robotData.model) {
+            this.scene.remove(robotData.model)
+            
+            // Clean up resources
+            robotData.model.traverse(child => {
+                if (child instanceof THREE.Mesh) {
+                    if (child.geometry) child.geometry.dispose()
+                    
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(mat => mat.dispose?.())
+                    } else if (child.material) {
+                        child.material.dispose()
+                    }
+                }
+            })
+            
+            // Remove floating label
+            if (robotData.model.userData.label) {
+                robotData.model.userData.label.remove()
+            }
+        }
+        
+        // Remove from tracking
+        delete this.robots[id]
+    }
+    
+    // Public methods for World.js to use
+    
+    // Get connected player count
+    getConnectedPlayers() {
+        return Object.keys(this.players).length
+    }
+    
+    // Send position update to server
+    sendTransform(position, rotation) {
+        if (this.socket.connected) {
+            this.socket.emit('update-position', {
+                position,
+                rotation
+            })
+        }
+    }
+    
+    // Event handlers for World.js
+    onPlayerJoined(callback) {
+        this.on('player-joined', callback)
+    }
+    
+    onPlayerTransform(callback) {
+        this.on('player-transform', callback)
+    }
+    
+    onPlayerRemoved(callback) {
+        this.on('player-removed', callback)
+    }
+    
+    // Called in Experience's update method
     update(delta) {
+        if (!this.socket.connected) return
+        
+        // Send local player position to server
         const robot = this.experience.world?.robot?.group
         if (robot) {
-            const pos = robot.position
-            const rotY = robot.rotation.y
-            this.sendTransform(pos, rotY)
+            this.sendTransform(robot.position, robot.rotation.y)
         }
-
+        
+        // Update animations and labels for remote players
         for (const id in this.robots) {
             const { model, mixer } = this.robots[id]
-            if (mixer) mixer.update(delta)
-
+            
+            // Update animation
+            if (mixer) {
+                mixer.update(delta)
+            }
+            
+            // Update floating label position
             const label = model.userData.label
             if (label) {
                 const screenPos = model.position.clone().project(this.experience.camera.instance)
@@ -224,41 +339,26 @@ export default class SocketManager {
             }
         }
     }
-
+    
+    // Cleanup
     destroy() {
-        // ⛔️ Desconectar socket
-        this.socket.disconnect()
-      
-        // 🧹 Limpiar modelos y etiquetas
-        for (const id in this.robots) {
-          const { model } = this.robots[id]
-      
-          if (model) {
-            // Eliminar de la escena
-            this.scene.remove(model)
-      
-            // Eliminar geometrías y materiales
-            model.traverse(child => {
-              if (child.isMesh) {
-                child.geometry?.dispose()
-                if (Array.isArray(child.material)) {
-                  child.material.forEach(mat => mat.dispose?.())
-                } else {
-                  child.material?.dispose?.()
-                }
-              }
-            })
-      
-            // Eliminar etiqueta flotante
-            if (model.userData.label) {
-              model.userData.label.remove()
-            }
-          }
+        console.log('🧹 Cleaning up SocketManager')
+        
+        // Clear debug interval
+        clearInterval(this.debugInterval)
+        
+        // Disconnect
+        if (this.socket) {
+            this.socket.disconnect()
         }
-      
-        // Limpiar estructura
+        
+        // Clean up all remote players
+        Object.keys(this.robots).forEach(id => {
+            this._removeRemotePlayer(id)
+        })
+        
+        // Clear data
         this.robots = {}
-      }
-      
-
+        this.players = {}
+    }
 }
