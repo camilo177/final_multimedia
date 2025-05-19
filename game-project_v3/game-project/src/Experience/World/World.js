@@ -3,7 +3,7 @@ import { gsap } from 'gsap'
 
 import Environment from './Environment.js'
 import Fox from './Fox.js'
-import Robot from './Robot.js'
+import ImageCharacter from './ImageCharacter.js'
 import ToyCarLoader from '../../loaders/ToyCarLoader.js'
 import Floor from './Floor.js'
 import ThirdPersonCamera from './ThirdPersonCamera.js'
@@ -12,7 +12,6 @@ import AmbientSound from './AmbientSound.js'
 import MobileControls from '../../controls/MobileControls.js'
 import LevelManager from './LevelManager.js'
 import FinalPrizeParticles from '../Utils/FinalPrizeParticles.js'
-import ImageCharacter from './ImageCharacter.js'
 
 export default class World {
     constructor(experience) {
@@ -97,9 +96,9 @@ export default class World {
         }
 
         if (this.totalDefaultCoins === undefined && this.loader?.prizes?.length) {
-            this.totalDefaultCoins = this.loader.prizes.filter(p => p.role === "default").length;
-            this.targetPointsForLevel = this.totalDefaultCoins;
-            console.log(`🎮 Level ${this.levelManager.currentLevel}: ${this.totalDefaultCoins} coins to collect`);
+            this.totalDefaultCoins = this.loader.prizes.filter(p => p.role === "default").length
+            this.targetPointsForLevel = this.totalDefaultCoins
+            console.log(`🎮 Level ${this.levelManager.currentLevel}: ${this.totalDefaultCoins} coins to collect`)
         }
 
         if (this.thirdPersonCamera && this.experience.isThirdPerson && !this.experience.renderer.instance.xr.isPresenting) {
@@ -185,6 +184,113 @@ export default class World {
         })
     }
 
+    activatePortalEffects(position) {
+        const portalLight = new THREE.PointLight(0x00ffff, 2, 10)
+        portalLight.position.copy(position)
+        portalLight.position.y += 1
+        this.scene.add(portalLight)
+        this.portalEffects.push(portalLight)
+
+        new FinalPrizeParticles({
+            scene: this.scene,
+            targetPosition: position.clone(),
+            sourcePosition: this.robot.body.position,
+            experience: this.experience
+        })
+
+        const portalRingGeometry = new THREE.TorusGeometry(1.5, 0.2, 16, 32)
+        const portalRingMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 1,
+            transparent: true,
+            opacity: 0.7
+        })
+        const portalRing = new THREE.Mesh(portalRingGeometry, portalRingMaterial)
+        portalRing.position.copy(position)
+        portalRing.position.y += 0.5
+        portalRing.rotation.x = Math.PI / 2
+        this.scene.add(portalRing)
+        this.portalEffects.push(portalRing)
+
+        const originalScale = portalRing.scale.clone()
+        this.portalAnimationId = setInterval(() => {
+            const pulseFactor = 1 + Math.sin(Date.now() * 0.003) * 0.1
+            portalRing.scale.set(
+                originalScale.x * pulseFactor,
+                originalScale.y * pulseFactor,
+                originalScale.z * pulseFactor
+            )
+            portalRing.rotation.z += 0.01
+            portalLight.intensity = 1.5 + Math.sin(Date.now() * 0.005) * 0.5
+        }, 16)
+    }
+
+    createTeleportEffect() {
+        const flashLight = new THREE.PointLight(0xffffff, 8, 15)
+        flashLight.position.copy(this.robot.group.position)
+        flashLight.position.y += 1
+        this.scene.add(flashLight)
+
+        const ringGeometry = new THREE.RingGeometry(0.1, 0.2, 32)
+        const ringMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        })
+        const ring = new THREE.Mesh(ringGeometry, ringMaterial)
+        ring.position.copy(this.robot.group.position)
+        ring.position.y += 0.1
+        ring.rotation.x = Math.PI / 2
+        this.scene.add(ring)
+
+        if (window.userInteracted) {
+            this.portalSound.currentTime = 0
+            this.portalSound.volume = 1
+            this.portalSound.play()
+        }
+
+        const originalState = {
+            up: this.experience.keyboard.keys.up,
+            down: this.experience.keyboard.keys.down,
+            left: this.experience.keyboard.keys.left,
+            right: this.experience.keyboard.keys.right,
+            space: this.experience.keyboard.keys.space
+        }
+        Object.keys(this.experience.keyboard.keys).forEach(key => {
+            this.experience.keyboard.keys[key] = false
+        })
+
+        gsap.to(flashLight, {
+            intensity: 0,
+            duration: 1.2,
+            onComplete: () => {
+                this.scene.remove(flashLight)
+            }
+        })
+        gsap.to(ring.scale, {
+            x: 20,
+            y: 20,
+            z: 1,
+            duration: 1,
+            ease: "power1.out",
+            onComplete: () => {
+                this.scene.remove(ring)
+            }
+        })
+        gsap.to(ring.material, {
+            opacity: 0,
+            duration: 1
+        })
+
+        setTimeout(() => {
+            Object.keys(originalState).forEach(key => {
+                this.experience.keyboard.keys[key] = originalState[key]
+            })
+        }, 1500)
+    }
+
     async loadLevel(level) {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
         const apiUrl = `${backendUrl}/api/blocks?level=${level}`
@@ -194,105 +300,107 @@ export default class World {
 
     clearCurrentScene() {
         if (!this.experience || !this.scene) {
-            console.warn('⚠️ No se puede limpiar: experience o escena destruida.')
-            return
-        }
-
-        if (this.portalAnimationId) {
-            clearInterval(this.portalAnimationId)
-            this.portalAnimationId = null
-        }
-
-        this.portalEffects.forEach(effect => {
-            if (effect) {
-                this.scene.remove(effect)
-                if (effect.geometry) effect.geometry.dispose()
-                if (effect.material) {
-                    if (Array.isArray(effect.material)) {
-                        effect.material.forEach(mat => mat.dispose())
-                    } else {
-                        effect.material.dispose()
-                    }
-                }
-            }
-        })
-        this.portalEffects = []
-
-        let visualObjectsRemoved = 0
-        let physicsBodiesRemoved = 0
-
-        const childrenToRemove = []
-        this.scene.children.forEach((child) => {
-            if (child.userData && child.userData.levelObject) {
-                childrenToRemove.push(child)
-            }
-        })
-
-        childrenToRemove.forEach((child) => {
-            if (child.geometry) child.geometry.dispose()
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => mat.dispose())
-                } else {
-                    child.material.dispose()
-                }
-            }
-            this.scene.remove(child)
-            if (child.userData.physicsBody) {
-                this.experience.physics.world.removeBody(child.userData.physicsBody)
-            }
-            visualObjectsRemoved++
-        })
-
-        if (
-            this.experience.physics &&
-            this.experience.physics.world &&
-            Array.isArray(this.experience.physics.bodies) &&
-            this.experience.physics.bodies.length > 0
-        ) {
-            const survivingBodies = []
-            let bodiesBefore = this.experience.physics.bodies.length
-
-            this.experience.physics.bodies.forEach((body) => {
-                if (body.userData && body.userData.levelObject) {
-                    this.experience.physics.world.removeBody(body)
-                    physicsBodiesRemoved++
-                } else {
-                    survivingBodies.push(body)
-                }
-            })
-
-            this.experience.physics.bodies = survivingBodies
-
-            console.log(`🧹 Physics Cleanup Report:`)
-            console.log(`✅ Cuerpos físicos eliminados: ${physicsBodiesRemoved}`)
-            console.log(`🎯 Cuerpos físicos sobrevivientes: ${survivingBodies.length}`)
-            console.log(`📦 Estado inicial: ${bodiesBefore} cuerpos → Estado final: ${survivingBodies.length} cuerpos`)
-        } else {
-            console.warn('⚠️ Physics system no disponible o sin cuerpos activos, omitiendo limpieza física.')
-        }
-
-        console.log(`🧹 Escena limpiada antes de cargar el nuevo nivel.`)
-        console.log(`✅ Objetos 3D eliminados: ${visualObjectsRemoved}`)
-        console.log(`✅ Cuerpos físicos eliminados: ${physicsBodiesRemoved}`)
-        console.log(`🎯 Objetos 3D actuales en escena: ${this.scene.children.length}`)
-
-        if (this.loader && this.loader.prizes.length > 0) {
-            this.loader.prizes.forEach(prize => {
-                if (prize.model) {
-                    this.scene.remove(prize.model)
-                    if (prize.model.geometry) prize.model.geometry.dispose()
-                    if (prize.model.material) {
-                        if (Array.isArray(prize.model.material)) {
-                            prize.model.material.forEach(mat => mat.dispose())
-                        } else {
-                            prize.model.material.dispose()
-                        }
-                    }
-                }
-            })
-            this.loader.prizes = []
-            console.log('🎯 Premios del nivel anterior eliminados correctamente.')
-        }
+        console.warn('⚠️ No se puede limpiar: experience o escena destruida.')
+        return
     }
+
+    // Detener animaciones del portal
+    if (this.portalAnimationId) {
+        clearInterval(this.portalAnimationId)
+        this.portalAnimationId = null
+    }
+
+    // Eliminar efectos del portal
+    this.portalEffects.forEach(effect => {
+        if (effect) {
+            this.scene.remove(effect)
+            if (effect.geometry) effect.geometry.dispose()
+            if (effect.material) {
+                if (Array.isArray(effect.material)) {
+                    effect.material.forEach(mat => mat.dispose())
+                } else {
+                    effect.material.dispose()
+                }
+            }
+        }
+    })
+    this.portalEffects = []
+
+    let visualObjectsRemoved = 0
+    let physicsBodiesRemoved = 0
+
+    const childrenToRemove = []
+    this.scene.children.forEach((child) => {
+        if (child.userData && child.userData.levelObject) {
+            childrenToRemove.push(child)
+        }
+    })
+
+    childrenToRemove.forEach((child) => {
+        if (child.geometry) child.geometry.dispose()
+        if (child.material) {
+            if (Array.isArray(child.material)) {
+                child.material.forEach(mat => mat.dispose())
+            } else {
+                child.material.dispose()
+            }
+        }
+        this.scene.remove(child)
+        if (child.userData.physicsBody) {
+            this.experience.physics.world.removeBody(child.userData.physicsBody)
+        }
+        visualObjectsRemoved++
+    })
+
+    if (
+        this.experience.physics &&
+        this.experience.physics.world &&
+        Array.isArray(this.experience.physics.bodies) &&
+        this.experience.physics.bodies.length > 0
+    ) {
+        const survivingBodies = []
+        let bodiesBefore = this.experience.physics.bodies.length
+
+        this.experience.physics.bodies.forEach((body) => {
+            if (body.userData && body.userData.levelObject) {
+                this.experience.physics.world.removeBody(body)
+                physicsBodiesRemoved++
+            } else {
+                survivingBodies.push(body)
+            }
+        })
+
+        this.experience.physics.bodies = survivingBodies
+
+        console.log(`🧹 Physics Cleanup Report:`)
+        console.log(`✅ Cuerpos físicos eliminados: ${physicsBodiesRemoved}`)
+        console.log(`🎯 Cuerpos físicos sobrevivientes: ${survivingBodies.length}`)
+        console.log(`📦 Estado inicial: ${bodiesBefore} cuerpos → Estado final: ${survivingBodies.length} cuerpos`)
+    } else {
+        console.warn('⚠️ Physics system no disponible o sin cuerpos activos, omitiendo limpieza física.')
+    }
+
+    console.log(`🧹 Escena limpiada antes de cargar el nuevo nivel.`)
+    console.log(`✅ Objetos 3D eliminados: ${visualObjectsRemoved}`)
+    console.log(`✅ Cuerpos físicos eliminados: ${physicsBodiesRemoved}`)
+    console.log(`🎯 Objetos 3D actuales en escena: ${this.scene.children.length}`)
+
+    if (this.loader && this.loader.prizes.length > 0) {
+        this.loader.prizes.forEach(prize => {
+            if (prize.model) {
+                this.scene.remove(prize.model)
+                if (prize.model.geometry) prize.model.geometry.dispose()
+                if (prize.model.material) {
+                    if (Array.isArray(prize.model.material)) {
+                        prize.model.material.forEach(mat => mat.dispose())
+                    } else {
+                        prize.model.material.dispose()
+                    }
+                }
+            }
+        })
+        this.loader.prizes = []
+        console.log('🎯 Premios del nivel anterior eliminados correctamente.')
+    }
+}
 }
